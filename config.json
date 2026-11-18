@@ -1,0 +1,207 @@
+{
+  "screen": {
+    "width": 854,
+    "height": 480,
+    "fullscreen": true,
+    "maximize_apps": true
+  },
+  "theme": {
+    "bg_color": "#0c0914",
+    "bg_gradient": "#1a102c",
+    "tile_bg": "#221738",
+    "tile_border": "#7c3aed",
+    "tile_glow": "#ffd60a",
+    "tile_text": "#f3e8ff",
+    "accent": "#9333ea",
+    "font": "Sans",
+    "wallpaper": "builtin:comic"
+  },
+  "grid": {
+    "tile_width": 116,
+    "tile_height": 108,
+    "spacing_x": 26,
+    "spacing_y": 40,
+    "columns": 5,
+    "rows": 2,
+    "gutter": 8
+  },
+  "style": {
+    "radius": 3,
+    "padding": 14,
+    "border_style": "ink",
+    "border_width": 3.5,
+    "fill": "halftone",
+    "shadow": "hard",
+    "label": "inside",
+    "icon_scale": 1.0,
+    "font_size": 12.5,
+    "bg": "#7c3aed",
+    "border": "#0b0712",
+    "text": "#fff4d6"
+  },
+  "gamepad": {
+    "device_auto": true,
+    "preferred_device": "/dev/input/event0",
+    "layout": "auto"
+  },
+  "apps": [
+    {
+      "name": "Terminal",
+      "exec": "foot",
+      "icon": "utilities-terminal",
+      "description": "Consola del sistema",
+      "style": {
+        "bg": "#7c3aed",
+        "image": "",
+        "fill": "halftone"
+      },
+      "page": 0,
+      "poly": [
+        [
+          8.0,
+          44
+        ],
+        [
+          257.5,
+          44
+        ],
+        [
+          231.5,
+          243.2
+        ],
+        [
+          8.0,
+          247.4
+        ]
+      ]
+    },
+    {
+      "name": "Editor del menú",
+      "exec": "wiiu-shell --editor --config /etc/wiiu-shell/config.json",
+      "icon": "preferences-desktop-appearance",
+      "app_id": "wiiu-shell-editor",
+      "single_instance": true,
+      "description": "Forma, tamaño, colores y posición de cada elemento",
+      "style": {
+        "bg": "#e63946",
+        "image": "",
+        "fill": "halftone"
+      },
+      "page": 0,
+      "poly": [
+        [
+          696.5,
+          243.5
+        ],
+        [
+          846.0,
+          240.6
+        ],
+        [
+          846.0,
+          470
+        ],
+        [
+          676.5,
+          470
+        ]
+      ]
+    },
+    {
+      "name": "Prueba de botones",
+      "exec": "jstest-gtk",
+      "icon": "jstest-gtk",
+      "description": "Botones, sticks y gatillos del GamePad",
+      "style": {
+        "bg": "#3a86ff",
+        "image": "",
+        "fill": "halftone"
+      },
+      "page": 0,
+      "poly": [
+        [
+          266.5,
+          44
+        ],
+        [
+          447.5,
+          44
+        ],
+        [
+          469.5,
+          238.7
+        ],
+        [
+          240.5,
+          243.0
+        ]
+      ],
+      "app_id": "jstest-gtk"
+    },
+    {
+      "name": "Sensores y micrófono",
+      "exec": "sudo -E env SDL_VIDEODRIVER=wayland python3 /opt/drc/gamepad_dashboard.py",
+      "icon": "input-gaming",
+      "description": "Giroscopio, acelerómetro, micrófono, vibración y cámara",
+      "style": {
+        "bg": "#e63946",
+        "image": "builtin:burst",
+        "fill": "flat"
+      },
+      "page": 0,
+      "poly": [
+        [
+          456.5,
+          44
+        ],
+        [
+          655.5,
+          44
+        ],
+        [
+          623.5,
+          235.8
+        ],
+        [
+          478.5,
+          238.5
+        ]
+      ],
+      "app_id": "pygame"
+    }
+  ],
+  "binds": {
+    "HOME": "home",
+    "HOME+LEFT": "focus_prev",
+    "HOME+RIGHT": "focus_next",
+    "HOME+X": "close",
+    "HOME+L": "workspace_prev",
+    "HOME+R": "workspace_next",
+    "HOME+Y": "toggle_tile",
+    "HOME+ZL": "move_prev",
+    "HOME+ZR": "move_next",
+    "HOME+UP": "home_grid",
+    "HOME+DOWN": "recents",
+    "HOME+q": "close",
+    "HOME+t": "toggle_tile",
+    "HOME+Return": "exec foot",
+    "HOME+1": "workspace 1",
+    "HOME+2": "workspace 2",
+    "HOME+3": "workspace 3",
+    "HOME+4": "workspace 4",
+    "HOME+PLUS": "toggle_bar"
+  },
+  "windows": {
+    "workspaces": 4,
+    "tile_new_windows": false,
+    "tile_gap": 6
+  },
+  "bar": {
+    "enabled": true,
+    "command": "waybar",
+    "x": 0,
+    "y": 0,
+    "w": 854,
+    "h": 30
+  }
+}

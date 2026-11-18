@@ -1,0 +1,14 @@
+-I/usr/include/cairo
+-I/usr/include/freetype2
+-I/usr/include/libpng16
+-I/usr/include/pixman-1
+-I/usr/include/json-c
+-I../protocols
+-I.
+-D_GNU_SOURCE
+-std=c11
+-DWLR_USE_UNSTABLE
+-I../build-deps/include/wlroots-0.20
+-I../build-deps/include/libdrm
+-I../build-deps/include
+-I/usr/include/pixman-1

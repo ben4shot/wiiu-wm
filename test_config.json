@@ -1,0 +1,346 @@
+{
+  "screen": {
+    "width": 854,
+    "height": 480,
+    "fullscreen": true,
+    "maximize_apps": true
+  },
+  "theme": {
+    "bg_color": "#0c0914",
+    "bg_gradient": "#1a102c",
+    "tile_bg": "#221738",
+    "tile_border": "#7c3aed",
+    "tile_glow": "#ffd60a",
+    "tile_text": "#f3e8ff",
+    "accent": "#9333ea",
+    "font": "Sans",
+    "wallpaper": "builtin:comic"
+  },
+  "grid": {
+    "tile_width": 116,
+    "tile_height": 108,
+    "spacing_x": 26,
+    "spacing_y": 40,
+    "columns": 5,
+    "rows": 2,
+    "gutter": 8
+  },
+  "style": {
+    "radius": 3,
+    "padding": 14,
+    "border_style": "ink",
+    "border_width": 3.5,
+    "fill": "halftone",
+    "shadow": "hard",
+    "label": "inside",
+    "icon_scale": 1.0,
+    "font_size": 12.5,
+    "bg": "#7c3aed",
+    "border": "#0b0712",
+    "text": "#fff4d6"
+  },
+  "gamepad": {
+    "device_auto": true,
+    "preferred_device": "/dev/input/event0",
+    "layout": "auto"
+  },
+  "apps": [
+    {
+      "name": "Terminal",
+      "exec": "foot",
+      "icon": "utilities-terminal",
+      "description": "Consola del sistema",
+      "style": {
+        "bg": "#7c3aed",
+        "image": "",
+        "fill": "halftone"
+      },
+      "page": 0,
+      "poly": [
+        [
+          8.0,
+          44
+        ],
+        [
+          257.5,
+          44
+        ],
+        [
+          231.5,
+          243.2
+        ],
+        [
+          8.0,
+          247.4
+        ]
+      ]
+    },
+    {
+      "name": "Navegador",
+      "exec": "firefox",
+      "icon": "web-browser",
+      "description": "Explorador Web",
+      "style": {
+        "bg": "#3a86ff",
+        "image": "builtin:bubble",
+        "fill": "halftone"
+      },
+      "page": 0,
+      "poly": [
+        [
+          266.5,
+          44
+        ],
+        [
+          447.5,
+          44
+        ],
+        [
+          469.5,
+          238.7
+        ],
+        [
+          240.5,
+          243.0
+        ]
+      ]
+    },
+    {
+      "name": "Cámara",
+      "exec": "python3 ~/drc/drchost/drc_cam_v4l2.py",
+      "icon": "camera-web",
+      "description": "Cámara frontal Wii U GamePad",
+      "style": {
+        "bg": "#e63946",
+        "image": "builtin:burst",
+        "fill": "flat"
+      },
+      "page": 0,
+      "poly": [
+        [
+          456.5,
+          44
+        ],
+        [
+          655.5,
+          44
+        ],
+        [
+          623.5,
+          235.8
+        ],
+        [
+          478.5,
+          238.5
+        ]
+      ]
+    },
+    {
+      "name": "Media Player",
+      "exec": "mpv --player-operation-mode=pseudo-gui",
+      "icon": "multimedia-player",
+      "description": "Reproductor de vídeo y música",
+      "style": {
+        "bg": "#f77f00",
+        "image": "",
+        "fill": "halftone"
+      },
+      "page": 0,
+      "poly": [
+        [
+          664.5,
+          44
+        ],
+        [
+          846.0,
+          44
+        ],
+        [
+          846.0,
+          231.6
+        ],
+        [
+          632.5,
+          235.6
+        ]
+      ]
+    },
+    {
+      "name": "Juegos",
+      "exec": "retroarch",
+      "icon": "input-gaming",
+      "description": "Emuladores y juegos",
+      "style": {
+        "bg": "#2ec4b6",
+        "image": "builtin:cloud",
+        "fill": "flat"
+      },
+      "page": 0,
+      "poly": [
+        [
+          8.0,
+          256.4
+        ],
+        [
+          171.5,
+          253.3
+        ],
+        [
+          191.5,
+          470
+        ],
+        [
+          8.0,
+          470
+        ]
+      ]
+    },
+    {
+      "name": "Archivos",
+      "exec": "pcmanfm",
+      "icon": "system-file-manager",
+      "description": "Gestor de archivos",
+      "style": {
+        "bg": "#ff4d8d",
+        "image": "",
+        "fill": "halftone"
+      },
+      "page": 0,
+      "poly": [
+        [
+          180.5,
+          253.1
+        ],
+        [
+          351.5,
+          249.9
+        ],
+        [
+          329.5,
+          470
+        ],
+        [
+          200.5,
+          470
+        ]
+      ]
+    },
+    {
+      "name": "Ajustes",
+      "exec": "wiiu_settings",
+      "icon": "preferences-system",
+      "description": "Configuración del entorno",
+      "style": {
+        "bg": "#4c1d95",
+        "image": "",
+        "fill": "halftone"
+      },
+      "page": 0,
+      "poly": [
+        [
+          360.5,
+          249.7
+        ],
+        [
+          519.5,
+          246.8
+        ],
+        [
+          541.5,
+          470
+        ],
+        [
+          338.5,
+          470
+        ]
+      ]
+    },
+    {
+      "name": "Gamepad Tools",
+      "exec": "python3 gamepad_dashboard.py",
+      "icon": "input-dialpad",
+      "description": "Sensores y vibración DRC",
+      "style": {
+        "bg": "#3a86ff",
+        "image": "builtin:burst",
+        "fill": "flat"
+      },
+      "page": 0,
+      "poly": [
+        [
+          528.5,
+          246.6
+        ],
+        [
+          687.5,
+          243.6
+        ],
+        [
+          667.5,
+          470
+        ],
+        [
+          550.5,
+          470
+        ]
+      ]
+    },
+    {
+      "name": "Editor del menú",
+      "exec": "wiiu-shell --editor --config /etc/wiiu-shell/config.json",
+      "icon": "preferences-desktop-appearance",
+      "app_id": "wiiu-shell-editor",
+      "single_instance": true,
+      "description": "Forma, tamaño, colores y posición de cada elemento",
+      "style": {
+        "bg": "#e63946",
+        "image": "",
+        "fill": "halftone"
+      },
+      "page": 0,
+      "poly": [
+        [
+          696.5,
+          243.5
+        ],
+        [
+          846.0,
+          240.6
+        ],
+        [
+          846.0,
+          470
+        ],
+        [
+          676.5,
+          470
+        ]
+      ]
+    }
+  ],
+  "binds": {
+    "HOME": "home",
+    "HOME+LEFT": "focus_prev",
+    "HOME+RIGHT": "focus_next",
+    "HOME+X": "close",
+    "HOME+L": "workspace_prev",
+    "HOME+R": "workspace_next",
+    "HOME+Y": "toggle_tile",
+    "HOME+ZL": "move_prev",
+    "HOME+ZR": "move_next",
+    "HOME+UP": "home_grid",
+    "HOME+DOWN": "recents",
+    "HOME+q": "close",
+    "HOME+t": "toggle_tile",
+    "HOME+Return": "exec foot",
+    "HOME+1": "workspace 1",
+    "HOME+2": "workspace 2",
+    "HOME+3": "workspace 3",
+    "HOME+4": "workspace 4"
+  },
+  "windows": {
+    "workspaces": 4,
+    "tile_new_windows": false,
+    "tile_gap": 6
+  }
+}

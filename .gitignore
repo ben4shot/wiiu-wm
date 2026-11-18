@@ -1,0 +1,11 @@
+build-deps/
+*.o
+*.d
+wiiu-shell
+/wiiu-wm
+build_local/
+test_shell
+test_*.png
+!test_config.json
+protocols/*-protocol.c
+protocols/*-protocol.h
