@@ -593,12 +593,26 @@ struct wm_view *wm_view_at(struct wm_server *s, double lx, double ly,
 
 /* --------------------------------------------------- ventanas xwayland */
 
+static void safe_remove_listener(struct wl_listener *l) {
+    if (l->link.prev && l->link.next && !wl_list_empty(&l->link)) {
+        wl_list_remove(&l->link);
+        wl_list_init(&l->link);
+    }
+}
+
 struct wm_xwayland_unmanaged {
     struct wm_server *server;
     struct wlr_xwayland_surface *xsurface;
     struct wlr_scene_tree *tree;
-    struct wl_listener associate, dissociate, destroy, request_configure, set_geometry;
+    struct wl_listener associate, dissociate, destroy, request_configure, set_geometry, tree_destroy;
 };
+
+static void unmanaged_tree_destroy(struct wl_listener *l, void *data) {
+    (void)data;
+    struct wm_xwayland_unmanaged *u = wl_container_of(l, u, tree_destroy);
+    safe_remove_listener(&u->tree_destroy);
+    u->tree = NULL;
+}
 
 static void unmanaged_destroy(struct wl_listener *l, void *data) {
     (void)data;
@@ -608,6 +622,7 @@ static void unmanaged_destroy(struct wl_listener *l, void *data) {
     wl_list_remove(&u->destroy.link);
     wl_list_remove(&u->request_configure.link);
     wl_list_remove(&u->set_geometry.link);
+    safe_remove_listener(&u->tree_destroy);
     if (u->tree) wlr_scene_node_destroy(&u->tree->node);
     free(u);
 }
@@ -617,13 +632,19 @@ static void unmanaged_associate(struct wl_listener *l, void *data) {
     struct wm_xwayland_unmanaged *u = wl_container_of(l, u, associate);
     if (!u->tree && u->xsurface->surface) {
         u->tree = wlr_scene_subsurface_tree_create(u->server->top_tree, u->xsurface->surface);
-        wlr_scene_node_set_position(&u->tree->node, u->xsurface->x, u->xsurface->y);
+        if (u->tree) {
+            wlr_scene_node_set_position(&u->tree->node, u->xsurface->x, u->xsurface->y);
+            safe_remove_listener(&u->tree_destroy);
+            u->tree_destroy.notify = unmanaged_tree_destroy;
+            wl_signal_add(&u->tree->node.events.destroy, &u->tree_destroy);
+        }
     }
 }
 
 static void unmanaged_dissociate(struct wl_listener *l, void *data) {
     (void)data;
     struct wm_xwayland_unmanaged *u = wl_container_of(l, u, dissociate);
+    safe_remove_listener(&u->tree_destroy);
     if (u->tree) {
         wlr_scene_node_destroy(&u->tree->node);
         u->tree = NULL;
@@ -647,13 +668,6 @@ static void unmanaged_set_geometry(struct wl_listener *l, void *data) {
     }
 }
 
-static void safe_remove_listener(struct wl_listener *l) {
-    if (l->link.prev && l->link.next && !wl_list_empty(&l->link)) {
-        wl_list_remove(&l->link);
-        wl_list_init(&l->link);
-    }
-}
-
 static void xwayland_view_map(struct wl_listener *l, void *data);
 static void xwayland_view_unmap(struct wl_listener *l, void *data);
 static void xwayland_view_commit(struct wl_listener *l, void *data);
@@ -667,6 +681,13 @@ static void xwayland_view_set_class(struct wl_listener *l, void *data);
 static void xwayland_view_associate(struct wl_listener *l, void *data);
 static void xwayland_view_dissociate(struct wl_listener *l, void *data);
 
+static void xwayland_surface_tree_destroy(struct wl_listener *l, void *data) {
+    (void)data;
+    struct wm_view *v = wl_container_of(l, v, surface_tree_destroy);
+    safe_remove_listener(&v->surface_tree_destroy);
+    v->surface_tree = NULL;
+}
+
 static void xwayland_view_associate(struct wl_listener *l, void *data) {
     (void)data;
     struct wm_view *v = wl_container_of(l, v, associate);
@@ -674,7 +695,12 @@ static void xwayland_view_associate(struct wl_listener *l, void *data) {
     if (!xsurface || !xsurface->surface) return;
     if (!v->surface_tree) {
         v->surface_tree = wlr_scene_subsurface_tree_create(v->tree, xsurface->surface);
-        v->surface_tree->node.data = v;
+        if (v->surface_tree) {
+            v->surface_tree->node.data = v;
+            safe_remove_listener(&v->surface_tree_destroy);
+            v->surface_tree_destroy.notify = xwayland_surface_tree_destroy;
+            wl_signal_add(&v->surface_tree->node.events.destroy, &v->surface_tree_destroy);
+        }
     }
     safe_remove_listener(&v->map);
     v->map.notify = xwayland_view_map;
@@ -692,12 +718,25 @@ static void xwayland_view_associate(struct wl_listener *l, void *data) {
 static void xwayland_view_dissociate(struct wl_listener *l, void *data) {
     (void)data;
     struct wm_view *v = wl_container_of(l, v, dissociate);
+    struct wm_server *s = v->server;
     safe_remove_listener(&v->map);
     safe_remove_listener(&v->unmap);
     safe_remove_listener(&v->commit);
+    safe_remove_listener(&v->surface_tree_destroy);
     if (v->surface_tree) {
         wlr_scene_node_destroy(&v->surface_tree->node);
         v->surface_tree = NULL;
+    }
+    if (v->mapped) {
+        v->mapped = false;
+        if (s->focused == v) {
+            s->focused = NULL;
+            wm_focus_view(s, last_focused_in(s, s->workspace));
+        } else {
+            wm_arrange(s);
+        }
+        wm_ui_views_changed(s);
+        if (wm_view_count(s, -1) == 0 && s->ui == UI_HIDDEN) wm_ui_show(s, UI_HOME);
     }
 }
 
@@ -775,6 +814,7 @@ static void xwayland_view_destroy(struct wl_listener *l, void *data) {
     safe_remove_listener(&v->set_class);
     safe_remove_listener(&v->associate);
     safe_remove_listener(&v->dissociate);
+    safe_remove_listener(&v->surface_tree_destroy);
     wl_list_remove(&v->link);
     if (s->focused == v) s->focused = NULL;
     if (v->surface_tree) {
@@ -844,6 +884,7 @@ static void new_xwayland_surface(struct wl_listener *l, void *data) {
         struct wm_xwayland_unmanaged *u = calloc(1, sizeof(*u));
         u->server = s;
         u->xsurface = xsurface;
+        wl_list_init(&u->tree_destroy.link);
         u->destroy.notify = unmanaged_destroy;
         wl_signal_add(&xsurface->events.destroy, &u->destroy);
         u->associate.notify = unmanaged_associate;
@@ -876,6 +917,7 @@ static void new_xwayland_surface(struct wl_listener *l, void *data) {
     wl_list_init(&v->map.link);
     wl_list_init(&v->unmap.link);
     wl_list_init(&v->commit.link);
+    wl_list_init(&v->surface_tree_destroy.link);
 
     v->destroy.notify = xwayland_view_destroy;
     wl_signal_add(&xsurface->events.destroy, &v->destroy);

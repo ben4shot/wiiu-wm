@@ -77,7 +77,7 @@ struct wm_view {
     struct wl_listener map, unmap, commit, destroy;
     struct wl_listener request_maximize, request_fullscreen, request_move, request_resize;
     struct wl_listener associate, dissociate, request_configure, request_activate;
-    struct wl_listener set_title, set_class;
+    struct wl_listener set_title, set_class, surface_tree_destroy;
 };
 
 struct wm_keyboard {

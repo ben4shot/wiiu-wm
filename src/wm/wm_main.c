@@ -8,15 +8,19 @@
 #include <pixman.h>
 #include "wm.h"
 #include "wm_capture.h"
+#include "wm_frameclock.h"
 
 #include <getopt.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/timerfd.h>
 #include <time.h>
 #include <unistd.h>
 #include <wlr/backend/headless.h>
+#include <wlr/interfaces/wlr_output.h>
+#include <wlr/types/wlr_presentation_time.h>
 #include <wlr/types/wlr_data_device.h>
 #include <wlr/types/wlr_primary_selection_v1.h>
 #include <wlr/types/wlr_screencopy_v1.h>
@@ -30,7 +34,12 @@ static int opt_width = 854, opt_height = 480;
 
 long wm_stat_frames, wm_stat_buffers;   // diagnóstico (ver wm_capture)
 
+// Reloj de fotogramas (ver wm_frameclock.h). WIIU_FRAMECLOCK=0 vuelve al ritmo de la salida headless.
+static wm_frameclock g_fc;
+static bool g_fc_enabled;
+
 static void output_frame(struct wl_listener *l, void *data) {
+    if (!wm_frameclock_accept(&g_fc)) return;   // evento headless a destiempo: lo atiende el próximo tick
     wm_stat_frames++;
     (void)data;
     struct wm_output *o = wl_container_of(l, o, frame);
@@ -39,7 +48,15 @@ static void output_frame(struct wl_listener *l, void *data) {
     // (captura directa: sin wf-recorder ni segunda conversión de pantalla).
     struct wlr_output_state st;
     wlr_output_state_init(&st);
-    if (wlr_scene_output_build_state(so, &st, NULL)) {
+    bool built = wlr_scene_output_build_state(so, &st, NULL);
+    // Frame callbacks justo después de componer (la escena ya tiene sus búferes) y antes de capturar (~7,5 ms)
+    // y hacer commit: así los clientes con vsync (RetroArch) tienen casi todo el periodo para su fotograma.
+    // Al final solo les quedaban ~9 ms y perdían un 4–10 % de los ticks (B19, prueba 166).
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    wlr_scene_output_send_frame_done(so, &now);
+    wl_display_flush_clients(o->server->display);
+    if (built) {
         if (st.committed & WLR_OUTPUT_STATE_BUFFER) wm_stat_buffers++;
         if ((st.committed & WLR_OUTPUT_STATE_BUFFER) && st.buffer && wm_capture_wanted(o->server))
             wm_capture_buffer(o->server, st.buffer, (st.committed & WLR_OUTPUT_STATE_DAMAGE) ? &st.damage : NULL);
@@ -51,9 +68,6 @@ static void output_frame(struct wl_listener *l, void *data) {
         if (!idle) wlr_output_commit_state(o->wlr_output, &st);
     }
     wlr_output_state_finish(&st);
-    struct timespec now;
-    clock_gettime(CLOCK_MONOTONIC, &now);
-    wlr_scene_output_send_frame_done(so, &now);
     // Salida headless: si un fotograma no produce daño no llega otro evento de frame y los clientes
     // que esperan su frame callback (RetroArch con vsync) se quedan congelados hasta que algo
     // redibuja (p. ej. un toque). Mientras haya ventanas se mantiene el ritmo de fotogramas.
@@ -64,9 +78,35 @@ static void output_frame(struct wl_listener *l, void *data) {
 // salida renderiza. En una salida headless la cadena de eventos «frame» puede cortarse (p. ej. tras un
 // commit sin daño) y RetroArch/SDL se quedan parados hasta que algo redibuja. Este temporizador
 // independiente pide un fotograma cada 16 ms mientras haya ventanas.
+// Cada vencimiento del timerfd (rejilla fija de 60 Hz): con ventanas, se pide el fotograma a la salida.
+// wlr_output_send_frame emite «frame» en el acto; output_frame dibuja, captura, hace commit y entrega
+// los frame callbacks. El tiempo de captura ya no se suma al periodo.
+static int frame_clock_tick(int fd, uint32_t mask, void *data) {
+    (void)mask;
+    struct wm_server *s = data;
+    uint64_t exp = 0;
+    if (read(fd, &exp, sizeof(exp)) != sizeof(exp)) return 0;
+    struct wm_output *o;
+    if (wm_frameclock_set_active(&g_fc, g_fc_enabled && wm_view_count(s, -1) > 0)) {
+        // Sin ventanas (p. ej. HOME+X): el ritmo vuelve a la salida headless; hay que pedirle un fotograma
+        wl_list_for_each(o, &s->outputs, link) wlr_output_schedule_frame(o->wlr_output);
+    }
+    if (!g_fc.active) return 0;
+    wm_frameclock_tick(&g_fc);
+    wl_list_for_each(o, &s->outputs, link) {
+        wlr_output_send_frame(o->wlr_output);
+        break;   // una sola salida (854×480): el tick se atiende una vez
+    }
+    if (g_fc.ticks % 300 == 0)
+        wlr_log(WLR_INFO, "[wm] reloj: %ld ticks, %ld fotogramas, %ld eventos headless ignorados",
+                g_fc.ticks, g_fc.accepted, g_fc.ignored);
+    return 0;
+}
+
 static int frame_kick(void *data) {
     struct wm_server *s = data;
-    if (wm_view_count(s, -1) > 0) {
+    // Con el reloj activo, output_frame ya entrega los frame callbacks a 60 Hz en cada tick.
+    if (wm_view_count(s, -1) > 0 && !g_fc.active) {
         struct timespec now;
         clock_gettime(CLOCK_MONOTONIC, &now);
         struct wm_output *o;
@@ -112,7 +152,7 @@ static void new_output(struct wl_listener *l, void *data) {
     wlr_output_state_init(&st);
     wlr_output_state_set_enabled(&st, true);
     if (wlr_output_is_headless(wo)) {
-        wlr_output_state_set_custom_mode(&st, opt_width, opt_height, 60000);
+        wlr_output_state_set_custom_mode(&st, opt_width, opt_height, 59940);
     } else {
         struct wlr_output_mode *m = wlr_output_preferred_mode(wo);
         if (m) wlr_output_state_set_mode(&st, m);
@@ -198,6 +238,7 @@ int main(int argc, char *argv[]) {
     wlr_data_device_manager_create(s.display);
     wlr_primary_selection_v1_device_manager_create(s.display);
     wlr_viewporter_create(s.display);
+    wlr_presentation_create(s.display, s.backend, 2);
     wlr_single_pixel_buffer_manager_v1_create(s.display);
 
     s.output_layout = wlr_output_layout_create(s.display);
@@ -259,6 +300,24 @@ int main(int argc, char *argv[]) {
     wm_capture_init(&s);
     s.frame_kick = wl_event_loop_add_timer(s.loop, frame_kick, &s);
     wl_event_source_timer_update(s.frame_kick, 16);
+    wm_frameclock_init(&g_fc);
+    const char *fc_env = getenv("WIIU_FRAMECLOCK");
+    g_fc_enabled = !(fc_env && strcmp(fc_env, "0") == 0);
+    if (g_fc_enabled) {
+        int tfd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
+        struct itimerspec its = {
+            .it_interval = { 0, WM_FRAMECLOCK_PERIOD_NS },
+            .it_value = { 0, WM_FRAMECLOCK_PERIOD_NS },
+        };
+        if (tfd < 0 || timerfd_settime(tfd, 0, &its, NULL) != 0 ||
+            !wl_event_loop_add_fd(s.loop, tfd, WL_EVENT_READABLE, frame_clock_tick, &s)) {
+            wlr_log(WLR_ERROR, "[wm] no se pudo crear el reloj de fotogramas: ritmo de la salida headless");
+            if (tfd >= 0) close(tfd);
+            g_fc_enabled = false;
+        } else {
+            wlr_log(WLR_INFO, "[wm] reloj de fotogramas a 59,94 Hz (WIIU_FRAMECLOCK=0 lo desactiva)");
+        }
+    }
     wm_write_state(&s);
     wm_bar_sync(&s);
     signal(SIGPIPE, SIG_IGN);

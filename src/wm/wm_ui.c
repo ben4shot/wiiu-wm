@@ -1,4 +1,5 @@
 #include "wm.h"
+#include "wm_sound.h"
 #include "../draw_shapes.h"
 #include "../icons.h"
 #include "../images.h"
@@ -92,11 +93,13 @@ static void launch_app(struct wm_server *s, int idx) {
     const AppEntry *a = &s->cfg.apps[idx];
     // «folder:<nombre>» abre una carpeta (p. ej. los juegos de una consola); «folder:» vuelve al Inicio
     if (strncmp(a->exec, "folder:", 7) == 0) {
+        wm_sound_play(a->exec[7] ? WM_SFX_PAGE : WM_SFX_BACK);
         open_folder(s, a->exec + 7);
         return;
     }
     struct wm_view *v = a->single_instance ? view_for_app(s, a) : NULL;
     if (v) {
+        wm_sound_play(WM_SFX_SELECT);
         if (v->workspace != s->workspace) wm_switch_workspace(s, v->workspace);
         wm_ui_show(s, UI_HIDDEN);
         wm_focus_view(s, v);
@@ -104,6 +107,7 @@ static void launch_app(struct wm_server *s, int idx) {
     }
     // Siempre una instancia nueva, en el escritorio actual; al aparecer su ventana se oculta el Inicio
     if (app_manager_launch(&s->apps, a)) {
+        wm_sound_play(WM_SFX_SELECT);
         char msg[96];
         snprintf(msg, sizeof(msg), "Abriendo «%.60s»…", a->name);
         wm_ui_osd(s, msg);
@@ -161,6 +165,7 @@ static struct wm_view *recent_view(struct wm_server *s, int card) {
 static void open_recent(struct wm_server *s, int card) {
     struct wm_view *v = recent_view(s, card);
     if (!v) return;
+    wm_sound_play(WM_SFX_SELECT);
     if (v->workspace != s->workspace) wm_switch_workspace(s, v->workspace);
     wm_ui_show(s, UI_HIDDEN);
     wm_focus_view(s, v);
@@ -240,6 +245,7 @@ static void drawer_launch(struct wm_server *s, int i) {
     char cmd[MAX_STR + 16];
     if (d->terminal) snprintf(cmd, sizeof(cmd), "foot %s", d->exec);
     else snprintf(cmd, sizeof(cmd), "%s", d->exec);
+    wm_sound_play(WM_SFX_SELECT);
     wm_spawn(s, cmd);
     char msg[160];
     snprintf(msg, sizeof(msg), "Abriendo «%.60s»…", d->name);
@@ -538,9 +544,9 @@ void wm_ui_show(struct wm_server *s, enum wm_ui_mode mode) {
 void wm_ui_home_button(struct wm_server *s) {
     int n = wm_view_count(s, -1);
     switch (s->ui) {
-        case UI_HIDDEN: wm_ui_show(s, n > 0 ? UI_RECENTS : UI_HOME); break;
-        case UI_RECENTS: wm_ui_show(s, UI_HOME); break;
-        case UI_HOME: if (n > 0) wm_ui_show(s, UI_HIDDEN); break;
+        case UI_HIDDEN: wm_sound_play(WM_SFX_HOME); wm_ui_show(s, n > 0 ? UI_RECENTS : UI_HOME); break;
+        case UI_RECENTS: wm_sound_play(WM_SFX_HOME); wm_ui_show(s, UI_HOME); break;
+        case UI_HOME: if (n > 0) { wm_sound_play(WM_SFX_BACK); wm_ui_show(s, UI_HIDDEN); } break;
     }
 }
 
@@ -555,28 +561,35 @@ void wm_ui_views_changed(struct wm_server *s) {
 void wm_ui_nav(struct wm_server *s, NavAction act) {
     if (s->ui == UI_HOME && in_drawer(s) && s->drawer_count > 0) {
         int f = s->drawer_focus;
+        bool moved_out = false;
         switch (act) {
             case NAV_LEFT: if (f > 0) f--; break;
             case NAV_RIGHT: if (f < s->drawer_count - 1) f++; break;
             case NAV_DOWN: if (f + DRAWER_COLS < s->drawer_count) f += DRAWER_COLS; break;
             case NAV_UP:
                 if (f >= DRAWER_COLS) f -= DRAWER_COLS;
-                else s->home_target = 0;          // de la primera fila, de vuelta a la página
+                else { s->home_target = 0; moved_out = true; }  // de la primera fila, de vuelta a la página
                 break;
             case NAV_ACTION_A: drawer_launch(s, f); break;
-            case NAV_ACTION_B: s->home_target = 0; break;
+            case NAV_ACTION_B: s->home_target = 0; moved_out = true; break;
             default: break;
         }
-        if (f != s->drawer_focus) { s->drawer_focus = f; drawer_reveal(s); }
+        if (f != s->drawer_focus) { s->drawer_focus = f; drawer_reveal(s); wm_sound_play(WM_SFX_TICK); }
+        else if (moved_out) wm_sound_play(WM_SFX_BACK);
+        else if (act == NAV_LEFT || act == NAV_RIGHT || act == NAV_UP || act == NAV_DOWN) wm_sound_play(WM_SFX_EDGE);
         wm_ui_redraw(s);
         schedule_anim(s);
         return;
     }
     if (s->ui == UI_HOME) {
+        int old_focus = s->grid.focused_index;
+        int old_page = s->grid.current_page;
         switch (act) {
-            case NAV_UP: grid_view_nav(&s->grid, 0, -1); break;
+            case NAV_UP:
+                grid_view_nav(&s->grid, 0, -1);
+                wm_sound_play(s->grid.focused_index != old_focus ? WM_SFX_TICK : WM_SFX_EDGE);
+                break;
             case NAV_DOWN: {
-                int old_focus = s->grid.focused_index;
                 grid_view_nav(&s->grid, 0, 1);
                 // Si la cruceta hacia abajo ya no puede avanzar a otra baldosa, bajar al cajón
                 if (s->grid.focused_index == old_focus) {
@@ -584,36 +597,57 @@ void wm_ui_nav(struct wm_server *s, NavAction act) {
                     s->home_target = s->height;
                     s->drawer_focus = 0;
                     drawer_reveal(s);
+                    wm_sound_play(WM_SFX_PAGE);
+                } else {
+                    wm_sound_play(WM_SFX_TICK);
                 }
                 break;
             }
-            case NAV_LEFT: grid_view_nav(&s->grid, -1, 0); break;
-            case NAV_RIGHT: grid_view_nav(&s->grid, 1, 0); break;
-            case NAV_PAGE_PREV: grid_view_prev_page(&s->grid); break;
-            case NAV_PAGE_NEXT: grid_view_next_page(&s->grid); break;
+            case NAV_LEFT:
+                grid_view_nav(&s->grid, -1, 0);
+                wm_sound_play(s->grid.focused_index != old_focus ? WM_SFX_TICK : WM_SFX_EDGE);
+                break;
+            case NAV_RIGHT:
+                grid_view_nav(&s->grid, 1, 0);
+                wm_sound_play(s->grid.focused_index != old_focus ? WM_SFX_TICK : WM_SFX_EDGE);
+                break;
+            case NAV_PAGE_PREV:
+                grid_view_prev_page(&s->grid);
+                wm_sound_play(s->grid.current_page != old_page ? WM_SFX_PAGE : WM_SFX_EDGE);
+                break;
+            case NAV_PAGE_NEXT:
+                grid_view_next_page(&s->grid);
+                wm_sound_play(s->grid.current_page != old_page ? WM_SFX_PAGE : WM_SFX_EDGE);
+                break;
             case NAV_ACTION_A: launch_app(s, s->grid.focused_index); break;
             case NAV_ACTION_B:
-                if (s->folder[0]) { open_folder(s, ""); return; }
-                if (wm_view_count(s, -1) > 0) wm_ui_show(s, UI_HIDDEN);
+                if (s->folder[0]) { wm_sound_play(WM_SFX_BACK); open_folder(s, ""); return; }
+                if (wm_view_count(s, -1) > 0) { wm_sound_play(WM_SFX_BACK); wm_ui_show(s, UI_HIDDEN); }
                 return;
             default: break;
         }
     } else if (s->ui == UI_RECENTS) {
         int card = s->recents.focused_card;
         switch (act) {
-            case NAV_LEFT: recents_view_nav(&s->recents, -1); break;
-            case NAV_RIGHT: recents_view_nav(&s->recents, 1); break;
+            case NAV_LEFT:
+                recents_view_nav(&s->recents, -1);
+                wm_sound_play(s->recents.focused_card != card ? WM_SFX_TICK : WM_SFX_EDGE);
+                break;
+            case NAV_RIGHT:
+                recents_view_nav(&s->recents, 1);
+                wm_sound_play(s->recents.focused_card != card ? WM_SFX_TICK : WM_SFX_EDGE);
+                break;
             case NAV_ACTION_A:
-                if (s->recents.count == 0) { wm_ui_show(s, UI_HOME); return; }
+                if (s->recents.count == 0) { wm_sound_play(WM_SFX_HOME); wm_ui_show(s, UI_HOME); return; }
                 open_recent(s, card);
                 return;
-            case NAV_ACTION_B: wm_ui_show(s, UI_HIDDEN); return;
+            case NAV_ACTION_B: wm_sound_play(WM_SFX_BACK); wm_ui_show(s, UI_HIDDEN); return;
             case NAV_ACTION_X: {
                 struct wm_view *v = recent_view(s, card);
-                if (v) wm_view_close(v);
+                if (v) { wm_sound_play(WM_SFX_CLOSE); wm_view_close(v); }
                 break;
             }
-            case NAV_ACTION_Y: wm_toggle_tile(s, recent_view(s, card)); break;
+            case NAV_ACTION_Y: wm_sound_play(WM_SFX_TICK); wm_toggle_tile(s, recent_view(s, card)); break;
             default: break;
         }
     }
@@ -655,12 +689,18 @@ void wm_ui_touch_up(struct wm_server *s, double x, double y) {
             if (!s->drawer) drawer_build(s);
             s->home_target = s->height;                   // pestaña «Aplicaciones»
             s->grid.pressed_index = -1;
+            wm_sound_play(WM_SFX_PAGE);
             schedule_anim(s);
             return;
         }
         if (y0 < s->height && y >= y0) {
             s->grid.pressed_index = -1;
-            if (y < y0 + drawer_inset(s) + DRAWER_HEADER) { s->home_target = 0; schedule_anim(s); return; }
+            if (y < y0 + drawer_inset(s) + DRAWER_HEADER) {
+                s->home_target = 0;
+                wm_sound_play(WM_SFX_BACK);
+                schedule_anim(s);
+                return;
+            }
             for (int i = 0; i < s->drawer_count; i++) {
                 double cx, cy, cw, ch;
                 drawer_cell(s, i, &cx, &cy, &cw, &ch);
@@ -684,12 +724,12 @@ void wm_ui_touch_up(struct wm_server *s, double x, double y) {
     if (s->ui == UI_RECENTS && tap) {
         bool close = false, tile = false;
         int card = recents_view_hit_test(&s->recents, x, y, s->width, s->height, &close, &tile);
-        if (card == -2) { wm_ui_show(s, UI_HOME); return; }
+        if (card == -2) { wm_sound_play(WM_SFX_HOME); wm_ui_show(s, UI_HOME); return; }
         if (card < 0) return;
         s->recents.focused_card = card;
         struct wm_view *v = recent_view(s, card);
-        if (close) { if (v) wm_view_close(v); }
-        else if (tile) wm_toggle_tile(s, v);
+        if (close) { if (v) { wm_sound_play(WM_SFX_CLOSE); wm_view_close(v); } }
+        else if (tile) { wm_sound_play(WM_SFX_TICK); wm_toggle_tile(s, v); }
         else { open_recent(s, card); return; }
         wm_ui_redraw(s);
         schedule_anim(s);
@@ -920,6 +960,7 @@ void wm_ui_init(struct wm_server *s) {
     s->anim_timer = wl_event_loop_add_timer(s->loop, anim_tick, s);
     wl_event_loop_add_signal(s->loop, SIGCHLD, child_exited, s);
 
+    wm_sound_init();
     s->home_target = -1;
     s->ui = UI_HOME;
     drawer_build(s);
@@ -927,6 +968,7 @@ void wm_ui_init(struct wm_server *s) {
 }
 
 void wm_ui_finish(struct wm_server *s) {
+    wm_sound_finish();
     free(s->drawer);
     page_cache_free(&s->page_cache);
     page_cache_wait_writes();
